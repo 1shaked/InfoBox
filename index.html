@@ -111,6 +111,23 @@
       cursor: pointer;
     }
 
+    .timeline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .timeline input[type="range"] {
+      flex: 1;
+    }
+
+    .timeline output {
+      min-width: 70px;
+      font-family: "Courier New", monospace;
+      font-size: 0.9rem;
+    }
+
     .button:disabled {
       opacity: 0.55;
       cursor: not-allowed;
@@ -145,8 +162,12 @@
       </label>
       <button id="playVideo" class="button" type="button" disabled>Play</button>
       <button id="pauseVideo" class="button" type="button" disabled>Pause</button>
+      <div class="timeline">
+        <input id="videoSeek" type="range" min="0" max="0" step="0.01" value="0" disabled />
+        <output id="videoTime">0:00</output>
+      </div>
     </div>
-    <div class="coords">
+    <div class="" style="display: flex; gap: 12px; align-items: center; margin: 5px;">
       <label>
         x1
         <input id="x1" type="text" readonly />
@@ -163,6 +184,11 @@
         y2
         <input id="y2" type="text" readonly />
       </label>
+      <div>
+        <button id="copy" style="" class="button" type="button">
+          copy coords
+        </button>
+      </div>
     </div>
     <div class="canvas-wrap">
       <canvas id="canvas" width="800" height="500"></canvas>
@@ -176,6 +202,8 @@
     const videoInput = document.getElementById("videoInput");
     const playButton = document.getElementById("playVideo");
     const pauseButton = document.getElementById("pauseVideo");
+    const videoSeek = document.getElementById("videoSeek");
+    const videoTime = document.getElementById("videoTime");
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -251,6 +279,14 @@
       const enabled = mediaType === "video" && video.readyState >= 2;
       playButton.disabled = !enabled;
       pauseButton.disabled = !enabled;
+      videoSeek.disabled = !enabled;
+    };
+
+    const formatTime = (seconds) => {
+      const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+      const minutes = Math.floor(safeSeconds / 60);
+      const remainder = safeSeconds % 60;
+      return `${minutes}:${String(remainder).padStart(2, "0")}`;
     };
 
     const getCanvasPoint = (event) => {
@@ -349,7 +385,28 @@
       start = null;
       end = null;
       clearCoords();
+      videoSeek.min = "0";
+      videoSeek.max = String(video.duration || 0);
+      videoSeek.value = "0";
+      videoTime.textContent = formatTime(0);
       updatePlaybackControls();
+      draw();
+    });
+
+    video.addEventListener("timeupdate", () => {
+      videoSeek.value = String(video.currentTime || 0);
+      videoTime.textContent = formatTime(video.currentTime);
+      if (mediaType === "video" && video.paused) {
+        draw();
+      }
+    });
+
+    videoSeek.addEventListener("input", (event) => {
+      if (mediaType !== "video") return;
+      const nextTime = Number(event.target.value);
+      if (!Number.isFinite(nextTime)) return;
+      video.currentTime = nextTime;
+      videoTime.textContent = formatTime(nextTime);
       draw();
     });
 
@@ -376,6 +433,21 @@
     });
 
     draw();
+
+    document.getElementById("copy").addEventListener("click", () => {
+      const x1 = coordFields.x1.value;
+      const y1 = coordFields.y1.value;
+      const x2 = coordFields.x2.value;
+      const y2 = coordFields.y2.value;
+      if (x1 && y1 && x2 && y2) {
+        const coordText = `[${x1}, ${y1}, ${x2}, ${y2}]`;
+        navigator.clipboard.writeText(coordText).then(() => {
+          alert(`Copied to clipboard: ${coordText}`);
+        });
+      } else {
+        alert("No coordinates to copy.");
+      }
+    });
   </script>
 </body>
 </html>

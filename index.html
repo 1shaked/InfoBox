@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image and Video Region Selector</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f2efe8;
+      --ink: #1f1a16;
+      --accent: #c0392b;
+      --panel: #ffffff;
+      --grid: #e0dbd3;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Georgia", "Times New Roman", serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 20% 20%, #fff8e8 0%, var(--bg) 60%, #efe7dc 100%);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--grid);
+      box-shadow: 0 18px 40px rgba(24, 19, 15, 0.15);
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 12px 0;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .coords {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(80px, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    .coords label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+
+    input[type="text"] {
+      border: 1px solid var(--grid);
+      padding: 8px;
+      font-family: "Courier New", monospace;
+      background: #fbfaf7;
+    }
+
+    .canvas-wrap {
+      border: 1px solid var(--grid);
+      background: repeating-linear-gradient(
+        45deg,
+        #f6f2ea,
+        #f6f2ea 10px,
+        #f0ebe3 10px,
+        #f0ebe3 20px
+      );
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+
+    canvas {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .hint {
+      margin: 12px 0 0 0;
+      font-size: 0.95rem;
+      color: #5a5048;
+    }
+
+    .file-input {
+      border: 1px dashed var(--grid);
+      padding: 10px 14px;
+      background: #fffaf0;
+    }
+
+    .button {
+      border: 1px solid var(--grid);
+      padding: 8px 14px;
+      background: #fff4e4;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    #video {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 16px;
+      }
+
+      .coords {
+        grid-template-columns: repeat(2, minmax(80px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Image and Video Region Selector</h1>
+    <div class="controls">
+      <label class="file-input">
+        Upload image
+        <input id="imageInput" type="file" accept="image/*" />
+      </label>
+      <label class="file-input">
+        Upload video
+        <input id="videoInput" type="file" accept="video/*" />
+      </label>
+      <button id="playVideo" class="button" type="button" disabled>Play</button>
+      <button id="pauseVideo" class="button" type="button" disabled>Pause</button>
+    </div>
+    <div class="coords">
+      <label>
+        x1
+        <input id="x1" type="text" readonly />
+      </label>
+      <label>
+        y1
+        <input id="y1" type="text" readonly />
+      </label>
+      <label>
+        x2
+        <input id="x2" type="text" readonly />
+      </label>
+      <label>
+        y2
+        <input id="y2" type="text" readonly />
+      </label>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="canvas" width="800" height="500"></canvas>
+    </div>
+    <video id="video" playsinline></video>
+    <p class="hint">Click and drag on the image or video frame to select an area. The selection is marked in red.</p>
+  </main>
+
+  <script>
+    const imageInput = document.getElementById("imageInput");
+    const videoInput = document.getElementById("videoInput");
+    const playButton = document.getElementById("playVideo");
+    const pauseButton = document.getElementById("pauseVideo");
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const coordFields = {
+      x1: document.getElementById("x1"),
+      y1: document.getElementById("y1"),
+      x2: document.getElementById("x2"),
+      y2: document.getElementById("y2"),
+    };
+
+    let img = null;
+    let mediaType = null;
+    let currentVideoUrl = null;
+    let renderFrameId = null;
+    let isDragging = false;
+    let start = null;
+    let end = null;
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    const clearCoords = () => {
+      Object.values(coordFields).forEach((field) => {
+        field.value = "";
+      });
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (mediaType === "image" && img) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      }
+      if (mediaType === "video" && video.readyState >= 2) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      if (start && end) {
+        const x = Math.min(start.x, end.x);
+        const y = Math.min(start.y, end.y);
+        const w = Math.abs(end.x - start.x);
+        const h = Math.abs(end.y - start.y);
+
+        ctx.fillStyle = "rgba(192, 57, 43, 0.2)";
+        ctx.strokeStyle = "#c0392b";
+        ctx.lineWidth = 2;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+      }
+    };
+
+    const updateCoords = () => {
+      if (!start || !end) {
+        clearCoords();
+        return;
+      }
+      const x1 = Math.round(Math.min(start.x, end.x));
+      const y1 = Math.round(Math.min(start.y, end.y));
+      const x2 = Math.round(Math.max(start.x, end.x));
+      const y2 = Math.round(Math.max(start.y, end.y));
+
+      coordFields.x1.value = x1;
+      coordFields.y1.value = y1;
+      coordFields.x2.value = x2;
+      coordFields.y2.value = y2;
+    };
+
+    const stopVideoRender = () => {
+      if (renderFrameId !== null) {
+        cancelAnimationFrame(renderFrameId);
+        renderFrameId = null;
+      }
+    };
+
+    const updatePlaybackControls = () => {
+      const enabled = mediaType === "video" && video.readyState >= 2;
+      playButton.disabled = !enabled;
+      pauseButton.disabled = !enabled;
+    };
+
+    const getCanvasPoint = (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (event.clientX - rect.left) * scaleX;
+      const y = (event.clientY - rect.top) * scaleY;
+      return {
+        x: clamp(x, 0, canvas.width),
+        y: clamp(y, 0, canvas.height),
+      };
+    };
+
+    canvas.addEventListener("mousedown", (event) => {
+      if (!mediaType) return;
+      isDragging = true;
+      start = getCanvasPoint(event);
+      end = start;
+      updateCoords();
+      draw();
+    });
+
+    canvas.addEventListener("mousemove", (event) => {
+      if (!isDragging || !mediaType) return;
+      end = getCanvasPoint(event);
+      updateCoords();
+      draw();
+    });
+
+    canvas.addEventListener("mouseup", () => {
+      if (!mediaType) return;
+      isDragging = false;
+      updateCoords();
+      draw();
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      if (!mediaType) return;
+      if (isDragging) {
+        isDragging = false;
+        updateCoords();
+        draw();
+      }
+    });
+
+    imageInput.addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      if (!file) return;
+
+      if (currentVideoUrl) {
+        URL.revokeObjectURL(currentVideoUrl);
+        currentVideoUrl = null;
+      }
+      stopVideoRender();
+      video.removeAttribute("src");
+      video.load();
+      mediaType = "image";
+      updatePlaybackControls();
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const image = new Image();
+        image.onload = () => {
+          img = image;
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          start = null;
+          end = null;
+          clearCoords();
+          draw();
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    videoInput.addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      if (!file) return;
+
+      if (currentVideoUrl) {
+        URL.revokeObjectURL(currentVideoUrl);
+      }
+      currentVideoUrl = URL.createObjectURL(file);
+      img = null;
+      mediaType = "video";
+      stopVideoRender();
+      video.src = currentVideoUrl;
+      video.load();
+    });
+
+    video.addEventListener("loadedmetadata", () => {
+      canvas.width = video.videoWidth || canvas.width;
+      canvas.height = video.videoHeight || canvas.height;
+      start = null;
+      end = null;
+      clearCoords();
+      updatePlaybackControls();
+      draw();
+    });
+
+    const renderVideoFrame = () => {
+      draw();
+      if (mediaType === "video" && !video.paused && !video.ended) {
+        renderFrameId = requestAnimationFrame(renderVideoFrame);
+      } else {
+        renderFrameId = null;
+      }
+    };
+
+    playButton.addEventListener("click", () => {
+      if (mediaType !== "video") return;
+      video.play();
+      renderVideoFrame();
+    });
+
+    pauseButton.addEventListener("click", () => {
+      if (mediaType !== "video") return;
+      video.pause();
+      stopVideoRender();
+      draw();
+    });
+
+    draw();
+  </script>
+</body>
+</html>

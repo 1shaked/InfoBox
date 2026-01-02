@@ -133,6 +133,69 @@
       cursor: not-allowed;
     }
 
+    .box-panel {
+      margin: 16px 0 0 0;
+      padding: 12px;
+      border: 1px solid var(--grid);
+      background: #fff8ec;
+    }
+
+    .box-panel h2 {
+      margin: 0 0 8px 0;
+      font-size: 1rem;
+      letter-spacing: 0.2px;
+    }
+
+    .box-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .box-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .box-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--grid);
+      background: #ffffff;
+      padding: 8px 10px;
+    }
+
+    .box-item.active {
+      outline: 2px solid #2b90d9;
+      border-color: #2b90d9;
+    }
+
+    .box-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+
+    .box-name {
+      font-weight: 600;
+    }
+
+    .box-coords {
+      font-family: "Courier New", monospace;
+      font-size: 0.85rem;
+      color: #5a5048;
+    }
+
     #video {
       display: none;
     }
@@ -193,8 +256,16 @@
     <div class="canvas-wrap">
       <canvas id="canvas" width="800" height="500"></canvas>
     </div>
+    <section class="box-panel">
+      <h2>Video boxes</h2>
+      <div class="box-actions">
+        <button id="addBox" class="button" type="button">Add box</button>
+        <button id="deleteBox" class="button" type="button" disabled>Delete box</button>
+      </div>
+      <div id="boxList" class="box-list"></div>
+    </section>
     <video id="video" playsinline></video>
-    <p class="hint">Click and drag on the image or video frame to select an area. The selection is marked in red.</p>
+    <p class="hint">Click and drag on the image or video frame to select an area. Each box has its own color.</p>
   </main>
 
   <script>
@@ -207,6 +278,9 @@
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+    const addBoxButton = document.getElementById("addBox");
+    const deleteBoxButton = document.getElementById("deleteBox");
+    const boxList = document.getElementById("boxList");
     const coordFields = {
       x1: document.getElementById("x1"),
       y1: document.getElementById("y1"),
@@ -221,6 +295,10 @@
     let isDragging = false;
     let start = null;
     let end = null;
+    let activeBoxIndex = -1;
+    let boxes = [];
+
+    const boxColors = ["#b3392b", "#2b5bd9", "#2f8f4e", "#7a3fa0", "#8c5a2a", "#d4a62b"];
 
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -228,6 +306,115 @@
       Object.values(coordFields).forEach((field) => {
         field.value = "";
       });
+    };
+
+    const formatCoords = (coords) => {
+      if (!coords) return "—";
+      const { x1, y1, x2, y2 } = coords;
+      return `[${x1}, ${y1}, ${x2}, ${y2}]`;
+    };
+
+    const updateActiveBoxCoords = () => {
+      if (!start || !end || activeBoxIndex === -1) return;
+      const x1 = Math.round(Math.min(start.x, end.x));
+      const y1 = Math.round(Math.min(start.y, end.y));
+      const x2 = Math.round(Math.max(start.x, end.x));
+      const y2 = Math.round(Math.max(start.y, end.y));
+      boxes[activeBoxIndex].coords = { x1, y1, x2, y2 };
+    };
+
+    const syncCoordsFromActiveBox = () => {
+      const box = boxes[activeBoxIndex];
+      if (!box || !box.coords) {
+        clearCoords();
+        return;
+      }
+      coordFields.x1.value = box.coords.x1;
+      coordFields.y1.value = box.coords.y1;
+      coordFields.x2.value = box.coords.x2;
+      coordFields.y2.value = box.coords.y2;
+    };
+
+    const selectBox = (index) => {
+      activeBoxIndex = index;
+      const box = boxes[activeBoxIndex];
+      if (box && box.coords) {
+        start = { x: box.coords.x1, y: box.coords.y1 };
+        end = { x: box.coords.x2, y: box.coords.y2 };
+      } else {
+        start = null;
+        end = null;
+      }
+      syncCoordsFromActiveBox();
+      draw();
+      renderBoxList();
+    };
+
+    const renderBoxList = () => {
+      boxList.innerHTML = "";
+      boxes.forEach((box, index) => {
+        const row = document.createElement("div");
+        row.className = "box-item";
+        if (index === activeBoxIndex) row.classList.add("active");
+
+        const meta = document.createElement("div");
+        meta.className = "box-meta";
+
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = box.color;
+
+        const name = document.createElement("span");
+        name.className = "box-name";
+        name.textContent = box.name;
+
+        const coords = document.createElement("span");
+        coords.className = "box-coords";
+        coords.textContent = formatCoords(box.coords);
+
+        meta.appendChild(swatch);
+        meta.appendChild(name);
+        meta.appendChild(coords);
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "2rem";
+        
+        const editButton = document.createElement("button");
+        editButton.className = "button";
+        editButton.type = "button";
+        editButton.textContent = "Edit";
+        editButton.addEventListener("click", () => {
+          selectBox(index);
+        });
+
+        const copyButton = document.createElement("button");
+        copyButton.className = "button";
+        copyButton.type = "button";
+        copyButton.textContent = "Copy Coords";
+        copyButton.addEventListener("click", () => {
+          if (box.coords) {
+            const coordText = `[${box.coords.x1}, ${box.coords.y1}, ${box.coords.x2}, ${box.coords.y2}]`;
+            navigator.clipboard.writeText(coordText).then(() => {
+              alert(`Copied to clipboard: ${coordText}`);
+            });
+          } else {
+            alert("No coordinates to copy.");
+          }
+        });
+
+        actions.appendChild(copyButton);
+        actions.appendChild(editButton);
+        row.appendChild(meta);
+        row.appendChild(actions);
+        row.addEventListener("click", (event) => {
+          if (event.target === editButton) return;
+          selectBox(index);
+        });
+        boxList.appendChild(row);
+      });
+
+      deleteBoxButton.disabled = boxes.length === 0 || activeBoxIndex === -1;
     };
 
     const draw = () => {
@@ -238,34 +425,28 @@
       if (mediaType === "video" && video.readyState >= 2) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
-      if (start && end) {
-        const x = Math.min(start.x, end.x);
-        const y = Math.min(start.y, end.y);
-        const w = Math.abs(end.x - start.x);
-        const h = Math.abs(end.y - start.y);
-
-        ctx.fillStyle = "rgba(192, 57, 43, 0.2)";
-        ctx.strokeStyle = "#c0392b";
-        ctx.lineWidth = 2;
+      boxes.forEach((box, index) => {
+        if (!box.coords) return;
+        const x = Math.min(box.coords.x1, box.coords.x2);
+        const y = Math.min(box.coords.y1, box.coords.y2);
+        const w = Math.abs(box.coords.x2 - box.coords.x1);
+        const h = Math.abs(box.coords.y2 - box.coords.y1);
+        ctx.fillStyle = `${box.color}33`;
+        ctx.strokeStyle = box.color;
+        ctx.lineWidth = index === activeBoxIndex ? 3 : 2;
         ctx.fillRect(x, y, w, h);
         ctx.strokeRect(x, y, w, h);
-      }
+      });
     };
 
     const updateCoords = () => {
-      if (!start || !end) {
+      if (!start || !end || activeBoxIndex === -1) {
         clearCoords();
         return;
       }
-      const x1 = Math.round(Math.min(start.x, end.x));
-      const y1 = Math.round(Math.min(start.y, end.y));
-      const x2 = Math.round(Math.max(start.x, end.x));
-      const y2 = Math.round(Math.max(start.y, end.y));
-
-      coordFields.x1.value = x1;
-      coordFields.y1.value = y1;
-      coordFields.x2.value = x2;
-      coordFields.y2.value = y2;
+      updateActiveBoxCoords();
+      syncCoordsFromActiveBox();
+      renderBoxList();
     };
 
     const stopVideoRender = () => {
@@ -302,7 +483,7 @@
     };
 
     canvas.addEventListener("mousedown", (event) => {
-      if (!mediaType) return;
+      if (!mediaType || activeBoxIndex === -1) return;
       isDragging = true;
       start = getCanvasPoint(event);
       end = start;
@@ -311,21 +492,21 @@
     });
 
     canvas.addEventListener("mousemove", (event) => {
-      if (!isDragging || !mediaType) return;
+      if (!isDragging || !mediaType || activeBoxIndex === -1) return;
       end = getCanvasPoint(event);
       updateCoords();
       draw();
     });
 
     canvas.addEventListener("mouseup", () => {
-      if (!mediaType) return;
+      if (!mediaType || activeBoxIndex === -1) return;
       isDragging = false;
       updateCoords();
       draw();
     });
 
     canvas.addEventListener("mouseleave", () => {
-      if (!mediaType) return;
+      if (!mediaType || activeBoxIndex === -1) return;
       if (isDragging) {
         isDragging = false;
         updateCoords();
@@ -356,7 +537,10 @@
           canvas.height = image.naturalHeight;
           start = null;
           end = null;
+          boxes = [];
+          activeBoxIndex = -1;
           clearCoords();
+          renderBoxList();
           draw();
         };
         image.src = reader.result;
@@ -384,7 +568,10 @@
       canvas.height = video.videoHeight || canvas.height;
       start = null;
       end = null;
+      boxes = [];
+      activeBoxIndex = -1;
       clearCoords();
+      renderBoxList();
       videoSeek.min = "0";
       videoSeek.max = String(video.duration || 0);
       videoSeek.value = "0";
@@ -432,7 +619,36 @@
       draw();
     });
 
+    addBoxButton.addEventListener("click", () => {
+      const nextIndex = boxes.length;
+      const box = {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + nextIndex),
+        name: `Box ${nextIndex + 1}`,
+        color: boxColors[nextIndex % boxColors.length],
+        coords: null,
+      };
+      boxes.push(box);
+      selectBox(nextIndex);
+    });
+
+    deleteBoxButton.addEventListener("click", () => {
+      if (activeBoxIndex === -1) return;
+      boxes.splice(activeBoxIndex, 1);
+      if (boxes.length === 0) {
+        activeBoxIndex = -1;
+        start = null;
+        end = null;
+        clearCoords();
+      } else {
+        const nextIndex = Math.max(0, activeBoxIndex - 1);
+        selectBox(nextIndex);
+      }
+      renderBoxList();
+      draw();
+    });
+
     draw();
+    renderBoxList();
 
     document.getElementById("copy").addEventListener("click", () => {
       const x1 = coordFields.x1.value;

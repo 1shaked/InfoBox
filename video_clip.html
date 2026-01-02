@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Video Clip + Frame Export</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f2efe8;
+      --ink: #1f1a16;
+      --accent: #c0392b;
+      --panel: #ffffff;
+      --grid: #e0dbd3;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Georgia", "Times New Roman", serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 20% 20%, #fff8e8 0%, var(--bg) 60%, #efe7dc 100%);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--grid);
+      box-shadow: 0 18px 40px rgba(24, 19, 15, 0.15);
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 12px 0;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .timeline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .timeline input[type="range"] {
+      flex: 1;
+    }
+
+    .timeline output {
+      min-width: 80px;
+      font-family: "Courier New", monospace;
+      font-size: 0.9rem;
+    }
+
+    .time-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(140px, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    .time-fields label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+
+    input[type="text"] {
+      border: 1px solid var(--grid);
+      padding: 8px;
+      font-family: "Courier New", monospace;
+      background: #fbfaf7;
+    }
+
+    .file-input {
+      border: 1px dashed var(--grid);
+      padding: 10px 14px;
+      background: #fffaf0;
+    }
+
+    .button {
+      border: 1px solid var(--grid);
+      padding: 8px 14px;
+      background: #fff4e4;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .viewer {
+      border: 1px solid var(--grid);
+      background: repeating-linear-gradient(
+        45deg,
+        #f6f2ea,
+        #f6f2ea 10px,
+        #f0ebe3 10px,
+        #f0ebe3 20px
+      );
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    video {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      background: #1c1917;
+    }
+
+    .hint {
+      margin: 12px 0 0 0;
+      font-size: 0.95rem;
+      color: #5a5048;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 16px;
+      }
+
+      .time-fields {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Video Clip + Frame Export</h1>
+    <div class="controls">
+      <label class="file-input">
+        Upload video
+        <input id="videoInput" type="file" accept="video/*" />
+      </label>
+      <button id="playVideo" class="button" type="button" disabled>Play</button>
+      <button id="pauseVideo" class="button" type="button" disabled>Pause</button>
+      <button id="setStart" class="button" type="button" disabled>Set start</button>
+      <button id="setEnd" class="button" type="button" disabled>Set end</button>
+    </div>
+    <div class="timeline">
+      <input id="videoSeek" type="range" min="0" max="0" step="0.01" value="0" disabled />
+      <output id="videoTime">0:00 / 0:00</output>
+    </div>
+    <div class="time-fields" style="margin: 12px 0 0 0;">
+      <label>
+        Clip start (seconds)
+        <input id="startTime" type="text" readonly />
+      </label>
+      <label>
+        Clip end (seconds)
+        <input id="endTime" type="text" readonly />
+      </label>
+    </div>
+    <div class="controls" style="margin-top: 12px;">
+      <button id="downloadClip" class="button" type="button" disabled>Download clip</button>
+      <button id="downloadFrame" class="button" type="button" disabled>Download current frame</button>
+    </div>
+    <div class="viewer">
+      <video id="video" playsinline></video>
+    </div>
+    <p class="hint">Scrub to the moment you want, set start/end, then download a clip or a still frame from the display.</p>
+  </main>
+
+  <script>
+    const videoInput = document.getElementById("videoInput");
+    const playButton = document.getElementById("playVideo");
+    const pauseButton = document.getElementById("pauseVideo");
+    const setStartButton = document.getElementById("setStart");
+    const setEndButton = document.getElementById("setEnd");
+    const downloadClipButton = document.getElementById("downloadClip");
+    const downloadFrameButton = document.getElementById("downloadFrame");
+    const videoSeek = document.getElementById("videoSeek");
+    const videoTime = document.getElementById("videoTime");
+    const startField = document.getElementById("startTime");
+    const endField = document.getElementById("endTime");
+    const video = document.getElementById("video");
+
+    let currentVideoUrl = null;
+    let isRecording = false;
+    let clipStart = 0;
+    let clipEnd = 0;
+
+    const formatTime = (seconds) => {
+      const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+      const minutes = Math.floor(safeSeconds / 60);
+      const remainder = safeSeconds % 60;
+      return `${minutes}:${String(remainder).padStart(2, "0")}`;
+    };
+
+    const updateTimeFields = () => {
+      startField.value = clipStart.toFixed(2);
+      endField.value = clipEnd.toFixed(2);
+    };
+
+    const updateControls = () => {
+      const enabled = video.readyState >= 2;
+      playButton.disabled = !enabled;
+      pauseButton.disabled = !enabled;
+      setStartButton.disabled = !enabled;
+      setEndButton.disabled = !enabled;
+      downloadClipButton.disabled = !enabled || isRecording;
+      downloadFrameButton.disabled = !enabled;
+      videoSeek.disabled = !enabled;
+    };
+
+    const updateTimeline = () => {
+      const current = video.currentTime || 0;
+      const duration = video.duration || 0;
+      videoSeek.value = String(current);
+      videoTime.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+    };
+
+    const ensureValidRange = () => {
+      if (clipEnd <= clipStart) {
+        clipEnd = Math.min(clipStart + 1, video.duration || clipStart + 1);
+      }
+      if (clipEnd > (video.duration || clipEnd)) {
+        clipEnd = video.duration || clipEnd;
+      }
+      updateTimeFields();
+    };
+
+    const waitForEvent = (element, eventName) =>
+      new Promise((resolve) => {
+        const handler = () => {
+          element.removeEventListener(eventName, handler);
+          resolve();
+        };
+        element.addEventListener(eventName, handler);
+      });
+
+    const pickMimeType = () => {
+      const options = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+      return options.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+    };
+
+    videoInput.addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      if (!file) return;
+
+      if (currentVideoUrl) {
+        URL.revokeObjectURL(currentVideoUrl);
+      }
+      currentVideoUrl = URL.createObjectURL(file);
+      video.src = currentVideoUrl;
+      video.load();
+    });
+
+    video.addEventListener("loadedmetadata", () => {
+      clipStart = 0;
+      clipEnd = Math.max(1, video.duration || 0);
+      updateTimeFields();
+      videoSeek.min = "0";
+      videoSeek.max = String(video.duration || 0);
+      videoSeek.value = "0";
+      updateTimeline();
+      updateControls();
+    });
+
+    video.addEventListener("timeupdate", updateTimeline);
+
+    videoSeek.addEventListener("input", (event) => {
+      const nextTime = Number(event.target.value);
+      if (!Number.isFinite(nextTime)) return;
+      video.currentTime = nextTime;
+      updateTimeline();
+    });
+
+    playButton.addEventListener("click", () => {
+      video.play();
+    });
+
+    pauseButton.addEventListener("click", () => {
+      video.pause();
+    });
+
+    setStartButton.addEventListener("click", () => {
+      clipStart = video.currentTime || 0;
+      ensureValidRange();
+    });
+
+    setEndButton.addEventListener("click", () => {
+      clipEnd = video.currentTime || 0;
+      ensureValidRange();
+    });
+
+    downloadFrameButton.addEventListener("click", () => {
+      if (video.readyState < 2) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = "frame.png";
+      link.click();
+    });
+
+    downloadClipButton.addEventListener("click", async () => {
+      if (video.readyState < 2) return;
+      if (!window.MediaRecorder || !video.captureStream) {
+        alert("This browser does not support clip export.");
+        return;
+      }
+
+      ensureValidRange();
+      const duration = clipEnd - clipStart;
+      if (duration <= 0) {
+        alert("Please set an end time after the start time.");
+        return;
+      }
+
+      const stream = video.captureStream();
+      const mimeType = pickMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const chunks = [];
+      isRecording = true;
+      updateControls();
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "clip.webm";
+        link.click();
+        URL.revokeObjectURL(url);
+        isRecording = false;
+        updateControls();
+      };
+
+      video.pause();
+      video.currentTime = clipStart;
+      await waitForEvent(video, "seeked");
+      recorder.start();
+      video.play();
+
+      const stopHandler = () => {
+        if (video.currentTime >= clipEnd) {
+          recorder.stop();
+          video.pause();
+          video.removeEventListener("timeupdate", stopHandler);
+        }
+      };
+      video.addEventListener("timeupdate", stopHandler);
+    });
+  </script>
+</body>
+</html>

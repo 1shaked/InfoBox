@@ -4,12 +4,230 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Assist tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --bg-2: #1b1f2a;
+      --ink: #f4f2ee;
+      --muted: #b5b0a6;
+      --accent: #ffb347;
+      --accent-2: #7dd3fc;
+      --card: rgba(255, 255, 255, 0.08);
+      --stroke: rgba(255, 255, 255, 0.16);
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Unbounded", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 520px at 15% 10%, rgba(255, 179, 71, 0.18), transparent 70%),
+        radial-gradient(800px 600px at 85% 15%, rgba(125, 211, 252, 0.2), transparent 70%),
+        linear-gradient(140deg, var(--bg), var(--bg-2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 20px 64px;
+    }
+
+    .grid {
+      width: min(1000px, 100%);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      position: relative;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 16px 20px 8px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 3vw, 3rem);
+      letter-spacing: 0.02em;
+    }
+
+    .brand p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      max-width: 520px;
+      line-height: 1.5;
+    }
+
+    .badge {
+      font-family: "Space Mono", "Courier New", monospace;
+      border: 1px solid var(--stroke);
+      color: var(--muted);
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .card {
+      position: relative;
+      border: 1px solid var(--stroke);
+      border-radius: 20px;
+      padding: 22px 20px 24px;
+      background: var(--card);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 180px;
+      animation: float-in 700ms ease forwards;
+      opacity: 0;
+      transform: translateY(24px);
+    }
+
+    .card:nth-of-type(1) { animation-delay: 80ms; }
+    .card:nth-of-type(2) { animation-delay: 160ms; }
+    .card:nth-of-type(3) { animation-delay: 240ms; }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .card a {
+      margin-top: auto;
+      text-decoration: none;
+      color: var(--ink);
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+    }
+
+    .card a span {
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(255, 179, 71, 0.15);
+      border: 1px solid rgba(255, 179, 71, 0.5);
+      transition: transform 200ms ease, background 200ms ease;
+    }
+
+    .card a:hover span {
+      transform: translateX(4px);
+      background: rgba(255, 179, 71, 0.3);
+    }
+
+    .card.variant {
+      border-color: rgba(125, 211, 252, 0.45);
+    }
+
+    .card.variant a span {
+      background: rgba(125, 211, 252, 0.2);
+      border-color: rgba(125, 211, 252, 0.6);
+    }
+
+    .card.variant a:hover span {
+      background: rgba(125, 211, 252, 0.35);
+    }
+
+    .pulse {
+      position: absolute;
+      inset: -2px;
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      pointer-events: none;
+      animation: pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes float-in {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 0.6; }
+    }
+
+    @media (max-width: 720px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>Welcome to Assist Tools</h1>
-  <p>This is the main page for Assist Tools.</p>
-  <a href="/info_box.html">crop image / video for boxes</a>
-  <a href="/merge_audio.html">merge audio files </a>
-  <a href="/video_clip.html">video clip (experimental)</a>
+  <main class="grid">
+    <header>
+      <div class="brand">
+        <h1>Assist Tools</h1>
+        <p>Quick, focused utilities for slicing media, merging audio, and prototyping clips. Pick a tool to jump straight in.</p>
+      </div>
+      <div class="badge">Local Toolkit</div>
+    </header>
+
+    <section class="card">
+      <div class="pulse" aria-hidden="true"></div>
+      <h2>Crop for Info Boxes</h2>
+      <p>Prepare images or video frames to fit the Info Box layout with precise cropping.</p>
+      <a href="/info_box.html">
+        <span>→</span>
+        Open cropper
+      </a>
+    </section>
+
+    <section class="card variant">
+      <div class="pulse" aria-hidden="true"></div>
+      <h2>Merge Audio</h2>
+      <p>Stack multiple audio files into a single mix quickly, ready for edits or exports.</p>
+      <a href="/merge_audio.html">
+        <span>→</span>
+        Combine tracks
+      </a>
+    </section>
+
+    <section class="card">
+      <div class="pulse" aria-hidden="true"></div>
+      <h2>Video Clip Lab</h2>
+      <p>Experiment with trimming clips and testing short edits without extra setup.</p>
+      <a href="/video_clip.html">
+        <span>→</span>
+        Launch lab
+      </a>
+    </section>
+  </main>
 </body>
 </html>

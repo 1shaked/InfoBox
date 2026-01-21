@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audio Time Extract & Concatenate</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #10121a;
+        --muted: #5a6275;
+        --paper: #f6f0e6;
+        --accent: #e96b35;
+        --accent-dark: #c24a18;
+        --wash: #f1e7d2;
+        --surface: #ffffff;
+        --line: #e2d6c1;
+        --shadow: 0 18px 40px rgba(23, 26, 38, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Avenir Next", "Trebuchet MS", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 10% -10%, #ffe0c2 0%, transparent 60%),
+          radial-gradient(800px 500px at 90% 0%, #f7c6aa 0%, transparent 55%),
+          linear-gradient(120deg, #f9f4ea 0%, #f1e5d0 50%, #f7efe0 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        padding: 48px 20px 72px;
+      }
+
+      main {
+        width: min(1080px, 100%);
+        display: grid;
+        gap: 24px;
+      }
+
+      header {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        animation: float-in 0.7s ease-out both;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.1rem);
+        margin: 0;
+        letter-spacing: -0.03em;
+      }
+
+      header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1rem;
+        max-width: 70ch;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 18px;
+        animation: float-in 0.8s ease-out both;
+      }
+
+      .panel:nth-of-type(2) {
+        animation-delay: 0.08s;
+      }
+
+      .panel:nth-of-type(3) {
+        animation-delay: 0.16s;
+      }
+
+      .uploader {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        background: var(--wash);
+        border-radius: 16px;
+        border: 1px dashed var(--line);
+      }
+
+      .uploader input[type="file"] {
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        font-size: 0.95rem;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+        padding: 12px 18px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        box-shadow: 0 10px 20px rgba(233, 107, 53, 0.25);
+      }
+
+      button.secondary {
+        background: #202637;
+        box-shadow: 0 10px 20px rgba(32, 38, 55, 0.18);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        background: #d4c6b1;
+        box-shadow: none;
+      }
+
+      button:not(:disabled):hover {
+        transform: translateY(-1px);
+        background: var(--accent-dark);
+      }
+
+      button.secondary:not(:disabled):hover {
+        background: #141925;
+      }
+
+      .note {
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+
+      thead th {
+        text-align: left;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px;
+      }
+
+      tbody td {
+        padding: 12px 8px;
+        border-bottom: 1px solid #efe5d4;
+        vertical-align: top;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #f3dbc9;
+        color: #3f2a1c;
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+
+      .status {
+        display: grid;
+        gap: 6px;
+        font-size: 0.95rem;
+      }
+
+      .status strong {
+        font-weight: 600;
+      }
+
+      .download {
+        display: none;
+        text-decoration: none;
+        background: #111827;
+        color: white;
+        padding: 12px 18px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+
+      .download.show {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      @keyframes float-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 32px 16px 48px;
+        }
+
+        .actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        button,
+        .download {
+          width: 100%;
+          justify-content: center;
+        }
+
+        thead {
+          display: none;
+        }
+
+        table,
+        tbody,
+        tr,
+        td {
+          display: block;
+          width: 100%;
+        }
+
+        tbody tr {
+          padding: 12px 0;
+          border-bottom: 1px solid #efe5d4;
+        }
+
+        tbody td {
+          border: none;
+          padding: 6px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Audio Time Extract & Concatenate</h1>
+        <p>
+          Upload multiple WAV or MP3 files, inspect time metadata available in the
+          browser, then merge the audio in chronological order into a single WAV file.
+        </p>
+      </header>
+
+      <section class="panel">
+        <div class="uploader">
+          <label class="pill" for="audioFiles">Step 1 — Add audio files</label>
+          <input
+            id="audioFiles"
+            type="file"
+            accept=".mp3,.wav,audio/mpeg,audio/wav"
+            multiple
+          />
+          <p class="note">
+            Browser uploads expose <strong>LastWriteTime</strong> via file.lastModified.
+            CreationTime and LastAccessTime are not available for privacy reasons.
+          </p>
+        </div>
+        <div class="actions">
+          <button id="concatBtn" disabled>Concatenate by CreationTime</button>
+          <button id="clearBtn" class="secondary" disabled>Clear list</button>
+          <a id="downloadLink" class="download" download="concatenated.wav">Download WAV</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="status">
+          <strong>Status</strong>
+          <span id="statusText">Waiting for files.</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>CreationTime</th>
+              <th>LastWriteTime</th>
+              <th>LastAccessTime</th>
+              <th>Size</th>
+            </tr>
+          </thead>
+          <tbody id="fileRows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const audioInput = document.getElementById("audioFiles");
+      const concatBtn = document.getElementById("concatBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const fileRows = document.getElementById("fileRows");
+      const statusText = document.getElementById("statusText");
+      const downloadLink = document.getElementById("downloadLink");
+
+      let files = [];
+
+      const formatDate = (ms) => {
+        if (!ms) return "Unavailable";
+        return new Date(ms).toLocaleString();
+      };
+
+      const formatSize = (bytes) => {
+        if (!Number.isFinite(bytes)) return "-";
+        const units = ["B", "KB", "MB", "GB"];
+        let idx = 0;
+        let value = bytes;
+        while (value >= 1024 && idx < units.length - 1) {
+          value /= 1024;
+          idx += 1;
+        }
+        return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+      };
+
+      const renderRows = () => {
+        fileRows.innerHTML = "";
+        files.forEach((file) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td><strong>${file.name}</strong><br><span class="note">${file.type || "audio"}</span></td>
+            <td>Unavailable</td>
+            <td>${formatDate(file.lastModified)}</td>
+            <td>Unavailable</td>
+            <td>${formatSize(file.size)}</td>
+          `;
+          fileRows.appendChild(row);
+        });
+      };
+
+      const resetDownload = () => {
+        downloadLink.classList.remove("show");
+        downloadLink.href = "";
+      };
+
+      audioInput.addEventListener("change", (event) => {
+        files = Array.from(event.target.files || []);
+        renderRows();
+        concatBtn.disabled = files.length === 0;
+        clearBtn.disabled = files.length === 0;
+        statusText.textContent = files.length
+          ? `${files.length} file(s) ready.`
+          : "Waiting for files.";
+        resetDownload();
+      });
+
+      clearBtn.addEventListener("click", () => {
+        files = [];
+        audioInput.value = "";
+        renderRows();
+        concatBtn.disabled = true;
+        clearBtn.disabled = true;
+        statusText.textContent = "Waiting for files.";
+        resetDownload();
+      });
+
+      const resampleBuffer = async (buffer, targetRate, targetChannels) => {
+        if (
+          buffer.sampleRate === targetRate &&
+          buffer.numberOfChannels === targetChannels
+        ) {
+          return buffer;
+        }
+        const frameCount = Math.ceil(buffer.duration * targetRate);
+        const offline = new OfflineAudioContext(
+          targetChannels,
+          frameCount,
+          targetRate
+        );
+        const source = offline.createBufferSource();
+        source.buffer = buffer;
+        source.connect(offline.destination);
+        source.start(0);
+        return offline.startRendering();
+      };
+
+      const concatBuffers = (buffers, audioContext) => {
+        const totalFrames = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
+        const targetChannels = buffers[0].numberOfChannels;
+        const targetRate = buffers[0].sampleRate;
+        const combined = audioContext.createBuffer(
+          targetChannels,
+          totalFrames,
+          targetRate
+        );
+
+        let offset = 0;
+        buffers.forEach((buffer) => {
+          for (let channel = 0; channel < targetChannels; channel += 1) {
+            combined
+              .getChannelData(channel)
+              .set(buffer.getChannelData(channel), offset);
+          }
+          offset += buffer.length;
+        });
+        return combined;
+      };
+
+      const encodeWav = (buffer) => {
+        const numChannels = buffer.numberOfChannels;
+        const sampleRate = buffer.sampleRate;
+        const samples = buffer.length;
+        const bytesPerSample = 2;
+        const blockAlign = numChannels * bytesPerSample;
+        const byteRate = sampleRate * blockAlign;
+        const dataSize = samples * blockAlign;
+        const output = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(output);
+
+        const writeString = (offset, str) => {
+          for (let i = 0; i < str.length; i += 1) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+          }
+        };
+
+        writeString(0, "RIFF");
+        view.setUint32(4, 36 + dataSize, true);
+        writeString(8, "WAVE");
+        writeString(12, "fmt ");
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bytesPerSample * 8, true);
+        writeString(36, "data");
+        view.setUint32(40, dataSize, true);
+
+        let offset = 44;
+        for (let i = 0; i < samples; i += 1) {
+          for (let channel = 0; channel < numChannels; channel += 1) {
+            const sample = buffer.getChannelData(channel)[i];
+            const clamped = Math.max(-1, Math.min(1, sample));
+            view.setInt16(
+              offset,
+              clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff,
+              true
+            );
+            offset += 2;
+          }
+        }
+        return output;
+      };
+
+      concatBtn.addEventListener("click", async () => {
+        if (!files.length) return;
+        concatBtn.disabled = true;
+        statusText.textContent = "Decoding audio files...";
+        resetDownload();
+
+        try {
+          const sorted = [...files].sort(
+            (a, b) => (a.lastModified || 0) - (b.lastModified || 0)
+          );
+          const audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+          const decoded = [];
+
+          for (const file of sorted) {
+            const data = await file.arrayBuffer();
+            const buffer = await audioContext.decodeAudioData(data);
+            decoded.push(buffer);
+          }
+
+          const targetRate = decoded[0].sampleRate;
+          const targetChannels = Math.max(
+            ...decoded.map((buffer) => buffer.numberOfChannels)
+          );
+
+          statusText.textContent = "Aligning sample rates...";
+          const aligned = [];
+          for (const buffer of decoded) {
+            aligned.push(
+              await resampleBuffer(buffer, targetRate, targetChannels)
+            );
+          }
+
+          statusText.textContent = "Concatenating audio...";
+          const combined = concatBuffers(aligned, audioContext);
+          const wavBuffer = encodeWav(combined);
+
+          const blob = new Blob([wavBuffer], { type: "audio/wav" });
+          const url = URL.createObjectURL(blob);
+          downloadLink.href = url;
+          downloadLink.classList.add("show");
+          statusText.textContent = `Done. Output length: ${combined.duration.toFixed(
+            2
+          )}s.`;
+        } catch (error) {
+          statusText.textContent = "Failed to concatenate. See console for details.";
+          console.error(error);
+        } finally {
+          concatBtn.disabled = files.length === 0;
+        }
+      });
+    </script>
+  </body>
+</html>

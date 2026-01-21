@@ -317,10 +317,22 @@
       const downloadLink = document.getElementById("downloadLink");
 
       let files = [];
+      const customCreationTimes = new Map();
 
       const formatDate = (ms) => {
         if (!ms) return "Unavailable";
         return new Date(ms).toLocaleString();
+      };
+
+      const toDatetimeLocalValue = (ms) => {
+        if (!ms) return "";
+        const date = new Date(ms);
+        const pad = (value) => String(value).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+          date.getDate()
+        )}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+          date.getSeconds()
+        )}`;
       };
 
       const formatSize = (bytes) => {
@@ -338,10 +350,21 @@
       const renderRows = () => {
         fileRows.innerHTML = "";
         files.forEach((file) => {
+          const customValue = customCreationTimes.get(file.name);
+          const defaultValue = file.lastModified || "";
+          const inputValue = toDatetimeLocalValue(customValue ?? defaultValue);
           const row = document.createElement("tr");
           row.innerHTML = `
             <td><strong>${file.name}</strong><br><span class="note">${file.type || "audio"}</span></td>
-            <td>Unavailable</td>
+            <td>
+              <input
+                class="creation-input"
+                type="datetime-local"
+                data-file="${file.name}"
+                value="${inputValue}"
+                step="1"
+              />
+            </td>
             <td>${formatDate(file.lastModified)}</td>
             <td>Unavailable</td>
             <td>${formatSize(file.size)}</td>
@@ -357,6 +380,7 @@
 
       audioInput.addEventListener("change", (event) => {
         files = Array.from(event.target.files || []);
+        customCreationTimes.clear();
         renderRows();
         concatBtn.disabled = files.length === 0;
         clearBtn.disabled = files.length === 0;
@@ -369,11 +393,26 @@
       clearBtn.addEventListener("click", () => {
         files = [];
         audioInput.value = "";
+        customCreationTimes.clear();
         renderRows();
         concatBtn.disabled = true;
         clearBtn.disabled = true;
         statusText.textContent = "Waiting for files.";
         resetDownload();
+      });
+
+      fileRows.addEventListener("input", (event) => {
+        const target = event.target;
+        if (!target.classList.contains("creation-input")) return;
+        const fileName = target.dataset.file;
+        if (!fileName) return;
+        if (!target.value) {
+          customCreationTimes.delete(fileName);
+          return;
+        }
+        const parsed = Date.parse(target.value);
+        if (Number.isNaN(parsed)) return;
+        customCreationTimes.set(fileName, parsed);
       });
 
       const resampleBuffer = async (buffer, targetRate, targetChannels) => {
@@ -472,9 +511,11 @@
         resetDownload();
 
         try {
-          const sorted = [...files].sort(
-            (a, b) => (a.lastModified || 0) - (b.lastModified || 0)
-          );
+          const sorted = [...files].sort((a, b) => {
+            const aTime = customCreationTimes.get(a.name) ?? a.lastModified ?? 0;
+            const bTime = customCreationTimes.get(b.name) ?? b.lastModified ?? 0;
+            return aTime - bTime;
+          });
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
           const decoded = [];

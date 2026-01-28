@@ -103,6 +103,19 @@
       background: #fffaf0;
     }
 
+    .url-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .url-input {
+      flex: 1;
+      min-width: 220px;
+    }
+
     .button {
       border: 1px solid var(--grid);
       padding: 8px 14px;
@@ -223,6 +236,15 @@
         Upload video
         <input id="videoInput" type="file" accept="video/*" />
       </label>
+      <div class="url-controls">
+        <input id="mediaUrl" class="url-input" type="text" placeholder="Paste image or video URL" />
+        <select id="urlType" class="button" aria-label="URL media type">
+          <option value="auto">Auto-detect</option>
+          <option value="image">Image</option>
+          <option value="video">Video</option>
+        </select>
+        <button id="loadUrl" class="button" type="button">Load URL</button>
+      </div>
       <button id="playVideo" class="button" type="button" disabled>Play</button>
       <button id="pauseVideo" class="button" type="button" disabled>Pause</button>
       <div class="timeline">
@@ -275,6 +297,9 @@
     const pauseButton = document.getElementById("pauseVideo");
     const videoSeek = document.getElementById("videoSeek");
     const videoTime = document.getElementById("videoTime");
+    const mediaUrlInput = document.getElementById("mediaUrl");
+    const urlTypeSelect = document.getElementById("urlType");
+    const loadUrlButton = document.getElementById("loadUrl");
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -306,6 +331,26 @@
       Object.values(coordFields).forEach((field) => {
         field.value = "";
       });
+    };
+
+    const stopAndClearVideo = () => {
+      stopVideoRender();
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      if (currentVideoUrl && currentVideoUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(currentVideoUrl);
+      }
+      currentVideoUrl = null;
+    };
+
+    const resetBoxesAndCanvas = () => {
+      start = null;
+      end = null;
+      boxes = [];
+      activeBoxIndex = -1;
+      clearCoords();
+      renderBoxList();
     };
 
     const formatCoords = (coords) => {
@@ -518,13 +563,7 @@
       const [file] = event.target.files;
       if (!file) return;
 
-      if (currentVideoUrl) {
-        URL.revokeObjectURL(currentVideoUrl);
-        currentVideoUrl = null;
-      }
-      stopVideoRender();
-      video.removeAttribute("src");
-      video.load();
+      stopAndClearVideo();
       mediaType = "image";
       updatePlaybackControls();
 
@@ -535,12 +574,7 @@
           img = image;
           canvas.width = image.naturalWidth;
           canvas.height = image.naturalHeight;
-          start = null;
-          end = null;
-          boxes = [];
-          activeBoxIndex = -1;
-          clearCoords();
-          renderBoxList();
+          resetBoxesAndCanvas();
           draw();
         };
         image.src = reader.result;
@@ -552,13 +586,11 @@
       const [file] = event.target.files;
       if (!file) return;
 
-      if (currentVideoUrl) {
-        URL.revokeObjectURL(currentVideoUrl);
-      }
+      stopAndClearVideo();
       currentVideoUrl = URL.createObjectURL(file);
       img = null;
       mediaType = "video";
-      stopVideoRender();
+      video.crossOrigin = "anonymous";
       video.src = currentVideoUrl;
       video.load();
     });
@@ -566,18 +598,20 @@
     video.addEventListener("loadedmetadata", () => {
       canvas.width = video.videoWidth || canvas.width;
       canvas.height = video.videoHeight || canvas.height;
-      start = null;
-      end = null;
-      boxes = [];
-      activeBoxIndex = -1;
-      clearCoords();
-      renderBoxList();
+      resetBoxesAndCanvas();
       videoSeek.min = "0";
       videoSeek.max = String(video.duration || 0);
       videoSeek.value = "0";
       videoTime.textContent = formatTime(0);
       updatePlaybackControls();
       draw();
+    });
+
+    video.addEventListener("error", () => {
+      updatePlaybackControls();
+      if (mediaType === "video") {
+        alert("Could not load video from URL.");
+      }
     });
 
     video.addEventListener("timeupdate", () => {
@@ -617,6 +651,67 @@
       video.pause();
       stopVideoRender();
       draw();
+    });
+
+    const loadImageFromUrl = (url) => {
+      stopAndClearVideo();
+      mediaType = "image";
+      updatePlaybackControls();
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        img = image;
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        resetBoxesAndCanvas();
+        draw();
+      };
+      image.onerror = () => {
+        alert("Could not load image from URL.");
+      };
+      image.src = url;
+    };
+
+    const loadVideoFromUrl = (url) => {
+      stopAndClearVideo();
+      img = null;
+      mediaType = "video";
+      video.crossOrigin = "anonymous";
+      video.src = url;
+      video.load();
+      updatePlaybackControls();
+    };
+
+    const loadUrl = () => {
+      const url = (mediaUrlInput.value || "").trim();
+      if (!url) {
+        alert("Paste a URL first.");
+        return;
+      }
+      const selectedType = urlTypeSelect.value;
+      if (selectedType === "image") {
+        loadImageFromUrl(url);
+        return;
+      }
+      if (selectedType === "video") {
+        loadVideoFromUrl(url);
+        return;
+      }
+      const probeImage = new Image();
+      probeImage.onload = () => {
+        loadImageFromUrl(url);
+      };
+      probeImage.onerror = () => {
+        loadVideoFromUrl(url);
+      };
+      probeImage.src = url;
+    };
+
+    loadUrlButton.addEventListener("click", loadUrl);
+    mediaUrlInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        loadUrl();
+      }
     });
 
     addBoxButton.addEventListener("click", () => {

@@ -350,6 +350,7 @@
       const renderRows = () => {
         fileRows.innerHTML = "";
         files.forEach((file) => {
+          console.log(file);
           const customValue = customCreationTimes.get(file.name);
           const defaultValue = file.lastModified || "";
           const inputValue = toDatetimeLocalValue(customValue ?? defaultValue);
